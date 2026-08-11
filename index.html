@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音樂授權知識草地</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #87CEEB; /* 天藍色背景 */
+            font-family: 'Comic Sans MS', '微軟正黑體', cursive, sans-serif;
+            user-select: none;
+        }
+
+        #game-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+
+        /* 準星造型 */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 12px;
+            height: 12px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border: 2px solid #ff69b4;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 10;
+            box-shadow: 0 0 5px #ff69b4;
+        }
+
+        #crosshair::after {
+            content: '';
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            width: 4px;
+            height: 4px;
+            background-color: #ff69b4;
+            border-radius: 50%;
+        }
+
+        /* UI 介面 */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+            text-shadow: 2px 2px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
+        }
+
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            color: #ff1493;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        #health-bar-container {
+            width: 200px;
+            height: 24px;
+            background-color: #ffe4e1;
+            border: 3px solid #ff69b4;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+
+        #health-bar {
+            width: 100%;
+            height: 100%;
+            background-color: #ff69b4;
+            transition: width 0.3s ease, background-color 0.3s;
+        }
+
+        /* 畫面螢幕 (開始/結束) */
+        #start-screen, #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            color: #ff1493;
+            text-align: center;
+            pointer-events: auto;
+        }
+
+        h1 {
+            font-size: 56px;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 5px rgba(255,105,180,0.5);
+            color: #ff1493;
+        }
+
+        p {
+            font-size: 22px;
+            max-width: 600px;
+            line-height: 1.6;
+            margin-bottom: 30px;
+            color: #333;
+            font-weight: bold;
+        }
+
+        button {
+            padding: 15px 40px;
+            font-size: 28px;
+            font-family: inherit;
+            font-weight: bold;
+            color: #fff;
+            background-color: #ff69b4;
+            border: 4px solid #ff1493;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(255, 105, 180, 0.4);
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            transform: scale(1.1) translateY(-5px);
+            box-shadow: 0 10px 25px rgba(255, 105, 180, 0.6);
+            background-color: #ff1493;
+        }
+        
+        button:active {
+            transform: scale(0.95);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        #damage-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 182, 193, 0); 
+            pointer-events: none;
+            z-index: 15;
+            transition: background-color 0.2s;
+        }
+    </style>
+    <!-- 載入 Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+</head>
+<body>
+
+    <div id="game-container"></div>
+    <div id="crosshair"></div>
+    <div id="damage-overlay"></div>
+
+    <div id="ui-layer" class="hidden">
+        <div class="top-bar">
+            <div id="score-display">分數: 0</div>
+            <div>
+                <div>愛心能量</div>
+                <div id="health-bar-container">
+                    <div id="health-bar"></div>
+                </div>
+            </div>
+        </div>
+        <div id="wave-display" style="text-align: center; color: #ff1493; font-size: 28px; font-weight: bold;">第 1 關</div>
+    </div>
+
+    <!-- 遊戲畫面螢幕 -->
+    <div id="start-screen">
+        <h1>✨ 音樂授權知識草地 ✨</h1>
+        <p>經濟部智慧財產局發布了新系統喔！<br>
+        用魔法棒回答新聞稿中的問題吧。<br><br>
+        <strong>操作方式：</strong><br>
+        ⌨️ W A S D - 在草地上奔跑<br>
+        🖱️ 滑動滑鼠 - 四處看看<br>
+        🪄 點擊左鍵 - 施放魔法<br><br>
+        對著精靈身上 <strong>正確</strong> 的答案施放魔法。<br>
+        如果打錯答案，精靈會調皮地扣你的愛心能量喔！</p>
+        <button id="start-btn">點擊開始遊玩</button>
+    </div>
+
+    <div id="game-over-screen" class="hidden">
+        <h1 style="color: #9370DB; text-shadow: 2px 2px 5px rgba(147,112,219,0.5);">魔法能量耗盡 😢</h1>
+        <p>小精靈們把你包圍了！</p>
+        <h2 id="final-score" style="color: #ff1493; font-size: 36px;">最終分數: 0</h2>
+        <button id="restart-btn">再玩一次</button>
+    </div>
+
+    <script>
+        // 遊戲狀態變數
+        let score = 0;
+        let health = 100;
+        let isPlaying = false;
+        let wave = 1;
+        let botsDefeated = 0;
+        
+        // 設定
+        const playerSpeed = 8.0; 
+        const botSpeedBase = 1.2; 
+        const maxBots = 3;
+        
+        // Three.js 核心
+        let scene, camera, renderer, controls;
+        let lastTime = performance.now();
+        
+        // 遊戲物件陣列
+        const bots = []; 
+        
+        // DOM 元素
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const uiLayer = document.getElementById('ui-layer');
+        const scoreDisplay = document.getElementById('score-display');
+        const healthBar = document.getElementById('health-bar');
+        const waveDisplay = document.getElementById('wave-display');
+        const startBtn = document.getElementById('start-btn');
+        const restartBtn = document.getElementById('restart-btn');
+        const damageOverlay = document.getElementById('damage-overlay');
+        
+        // 輸入狀態
+        const moveState = { forward: false, backward: false, left: false, right: false };
+        let velocity = new THREE.Vector3();
+        let direction = new THREE.Vector3();
+
+        // 射線偵測
+        const raycaster = new THREE.Raycaster();
+
+        // 音效組件
+        let listener, soundShoot, soundHit, soundDamage;
+
+        // 佔位音效
+        const shootSoundData = 'data:audio/wav;base64,UklGRl9vT1BXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU'+'A'.repeat(100); 
+        const hitSoundData = 'data:audio/wav;base64,UklGRl9vT1BXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU'+'A'.repeat(200); 
+        const damageSoundData = 'data:audio/wav;base64,UklGRl9vT1BXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU'+'A'.repeat(150); 
+
+        // 經濟部新聞稿題庫
+        const qaPool = [
+            {
+                q: "全新發布的是什麼系統？",
+                a: "音樂資訊整合系統",
+                w1: "線上音樂串流系統",
+                w2: "版權自動檢舉系統"
+            },
+            {
+                q: "發布該系統的是經濟部的哪個單位？",
+                a: "智慧財產局",
+                w1: "中小企業署",
+                w2: "國際貿易署"
+            },
+            {
+                q: "系統串接的「ISRC」代表什麼？",
+                a: "標準錄音錄影資料代碼",
+                w1: "國際標準圖書號碼",
+                w2: "國際標準商品條碼"
+            },
+            {
+                q: "截至目前系統資料量已超過多少筆？",
+                a: "75萬筆",
+                w1: "25萬筆",
+                w2: "100萬筆"
+            },
+            {
+                q: "提供廣播電視業者的「一站式服務」包含什麼？",
+                a: "清單管理及比對",
+                w1: "線上音樂播放",
+                w2: "自動生成音樂"
+            },
+            {
+                q: "目前全台已有幾家電視與廣播電台註冊使用？",
+                a: "84家",
+                w1: "20家",
+                w2: "150家"
+            },
+            {
+                q: "平台每月平均瀏覽人次達多少人？",
+                a: "3萬人",
+                w1: "1萬人",
+                w2: "10萬人"
+            },
+            {
+                q: "累計上傳歌單比對資料高達多少筆？",
+                a: "123萬筆",
+                w1: "50萬筆",
+                w2: "200萬筆"
+            }
+        ];
+
+        // 建立帶有可愛邊框的文字材質
+        function createTextTexture(text, textColor = '#fff', bgColor = '#ff69b4', size = 48, canvasWidth = 512, canvasHeight = 128) {
+            const canvas = document.createElement('canvas');
+            canvas.width = canvasWidth; 
+            canvas.height = canvasHeight;
+            const context = canvas.getContext('2d');
+            
+            // 圓角背景
+            context.fillStyle = bgColor;
+            context.beginPath();
+            context.roundRect(5, 5, canvas.width - 10, canvas.height - 10, 20); 
+            context.fill();
+            
+            // 可愛邊框
+            context.strokeStyle = '#fff';
+            context.lineWidth = 6;
+            context.stroke();
+            
+            // 文字設定
+            context.font = `bold ${size}px "Comic Sans MS", "微軟正黑體", sans-serif`;
+            context.fillStyle = textColor;
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            
+            // 加上文字陰影增加可愛度
+            context.shadowColor = "rgba(0,0,0,0.3)";
+            context.shadowOffsetX = 2;
+            context.shadowOffsetY = 2;
+            context.shadowBlur = 4;
+            context.fillText(text, canvas.width / 2, canvas.height / 2);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            return texture;
+        }
+
+        function init() {
+            // 1. 場景設定 (明亮草地)
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB); 
+            scene.fog = new THREE.Fog(0x87CEEB, 20, 80); 
+
+            // 2. 攝影機
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.y = 2.5; 
+
+            // 3. 音效設定
+            listener = new THREE.AudioListener();
+            camera.add(listener);
+
+            soundShoot = new THREE.Audio(listener);
+            soundHit = new THREE.Audio(listener);
+            soundDamage = new THREE.Audio(listener);
+
+            const audioLoader = new THREE.AudioLoader();
+            audioLoader.load(shootSoundData, function(buffer) { soundShoot.setBuffer(buffer); soundShoot.setVolume(0.3); });
+            audioLoader.load(hitSoundData, function(buffer) { soundHit.setBuffer(buffer); soundHit.setVolume(0.5); });
+            audioLoader.load(damageSoundData, function(buffer) { soundDamage.setBuffer(buffer); soundDamage.setVolume(0.5); });
+
+            // 4. 渲染器
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.getElementById('game-container').appendChild(renderer.domElement);
+
+            // 5. 控制器
+            controls = new THREE.PointerLockControls(camera, document.body);
+            
+            controls.addEventListener('lock', () => {
+                if (health > 0) {
+                    isPlaying = true;
+                    uiLayer.classList.remove('hidden');
+                    startScreen.classList.add('hidden');
+                    if (listener.context.state === 'suspended') listener.context.resume();
+                }
+            });
+
+            controls.addEventListener('unlock', () => {
+                if (health > 0 && isPlaying) {
+                    isPlaying = false;
+                    startScreen.classList.remove('hidden');
+                    startScreen.querySelector('h1').innerText = "遊戲暫停 ⏸️";
+                    startBtn.innerText = "繼續遊玩";
+                }
+            });
+
+            startBtn.addEventListener('click', () => controls.lock());
+            restartBtn.addEventListener('click', () => { resetGame(); controls.lock(); });
+
+            // 6. 燈光 (陽光與柔和環境光)
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); 
+            scene.add(ambientLight);
+
+            const sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            sunLight.position.set(50, 100, 50);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 1024;
+            sunLight.shadow.mapSize.height = 1024;
+            sunLight.shadow.camera.near = 0.5;
+            sunLight.shadow.camera.far = 200;
+            sunLight.shadow.camera.left = -50;
+            sunLight.shadow.camera.right = 50;
+            sunLight.shadow.camera.top = 50;
+            sunLight.shadow.camera.bottom = -50;
+            scene.add(sunLight);
+
+            scene.add(camera); 
+
+            // 7. 建立魔法棒與環境
+            createPlayerWand();
+            buildEnvironment();
+
+            // 事件監聽
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            document.addEventListener('mousedown', onMouseDown);
+            window.addEventListener('resize', onWindowResize);
+
+            // 開始動畫循環
+            animate();
+        }
+
+        function createPlayerWand() {
+            const wandGroup = new THREE.Group();
+
+            const stickGeo = new THREE.CylinderGeometry(0.02, 0.03, 0.7, 16);
+            const stickMat = new THREE.MeshStandardMaterial({ color: 0xFFE4C4, roughness: 0.8 }); 
+            const stick = new THREE.Mesh(stickGeo, stickMat);
+            stick.rotation.x = Math.PI / 2;
+            stick.position.set(0, 0, -0.3);
+            wandGroup.add(stick);
+
+            const starGeo = new THREE.IcosahedronGeometry(0.1, 0); 
+            const starMat = new THREE.MeshStandardMaterial({ 
+                color: 0xFFFF00, 
+                emissive: 0xFFD700, 
+                emissiveIntensity: 0.8,
+                roughness: 0.2,
+                metalness: 0.5
+            });
+            const star = new THREE.Mesh(starGeo, starMat);
+            star.position.set(0, 0, -0.7);
+            wandGroup.add(star);
+
+            const wandLight = new THREE.PointLight(0xFFD700, 1, 3);
+            wandLight.position.set(0, 0, -0.7);
+            wandGroup.add(wandLight);
+
+            wandGroup.position.set(0.4, -0.3, -0.4);
+            wandGroup.rotation.y = -Math.PI / 16;
+            wandGroup.rotation.x = Math.PI / 16;
+
+            camera.add(wandGroup);
+            camera.userData.wand = wandGroup; 
+            camera.userData.wandStar = star;
+        }
+
+        function buildEnvironment() {
+            // 草地地板
+            const floorGeo = new THREE.PlaneGeometry(200, 200);
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#7CFC00'; 
+            ctx.fillRect(0,0,256,256);
+            
+            ctx.fillStyle = '#32CD32'; 
+            for(let i=0; i<300; i++) {
+                const x = Math.random() * 256;
+                const y = Math.random() * 256;
+                ctx.beginPath();
+                ctx.ellipse(x, y, 2, 8, Math.random() * Math.PI, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+
+            const floorTexture = new THREE.CanvasTexture(canvas);
+            floorTexture.wrapS = THREE.RepeatWrapping;
+            floorTexture.wrapT = THREE.RepeatWrapping;
+            floorTexture.repeat.set(40, 40);
+
+            const floorMat = new THREE.MeshStandardMaterial({ 
+                map: floorTexture,
+                roughness: 0.9,
+                metalness: 0.0
+            });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+            
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.9 });
+            const leafMat = new THREE.MeshStandardMaterial({ color: 0x228B22, roughness: 0.8 }); 
+
+            for(let i=0; i<30; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 22 + Math.random() * 20; 
+                
+                const treeGroup = new THREE.Group();
+                treeGroup.position.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+
+                const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 3), trunkMat);
+                trunk.position.y = 1.5;
+                trunk.castShadow = true;
+                treeGroup.add(trunk);
+
+                const leaves = new THREE.Mesh(new THREE.ConeGeometry(2.5, 5, 8), leafMat);
+                leaves.position.y = 4.5;
+                leaves.castShadow = true;
+                treeGroup.add(leaves);
+
+                scene.add(treeGroup);
+            }
+        }
+
+        function generateNewsProblem() {
+            // 從題庫隨機挑選一題
+            const randomIndex = Math.floor(Math.random() * qaPool.length);
+            const qa = qaPool[randomIndex];
+
+            const answers = [
+                { val: qa.a, isCorrect: true },
+                { val: qa.w1, isCorrect: false },
+                { val: qa.w2, isCorrect: false }
+            ];
+            // 打亂答案順序
+            answers.sort(() => Math.random() - 0.5);
+
+            return { question: qa.q, answers: answers };
+        }
+
+        function spawnCuteMonster() {
+            if(bots.length >= maxBots) return;
+
+            const newsData = generateNewsProblem();
+            const botGroup = new THREE.Group();
+            botGroup.userData = { isBot: true, speed: botSpeedBase + (wave * 0.05) };
+
+            const hue = Math.random();
+            const color = new THREE.Color().setHSL(hue, 0.8, 0.7); 
+            
+            const bodyMat = new THREE.MeshStandardMaterial({ 
+                color: color,
+                roughness: 0.3,
+                metalness: 0.1
+            });
+
+            // 底部大圓
+            const baseGeo = new THREE.SphereGeometry(1.2, 32, 32);
+            const base = new THREE.Mesh(baseGeo, bodyMat);
+            base.position.y = 1.0;
+            base.castShadow = true;
+            botGroup.add(base);
+
+            // 中間肚子
+            const torsoGeo = new THREE.SphereGeometry(0.9, 32, 32);
+            const torso = new THREE.Mesh(torsoGeo, bodyMat);
+            torso.position.y = 2.6;
+            torso.castShadow = true;
+            botGroup.add(torso);
+
+            // 頂部頭
+            const headGeo = new THREE.SphereGeometry(0.7, 32, 32);
+            const head = new THREE.Mesh(headGeo, bodyMat);
+            head.position.y = 3.9;
+            head.castShadow = true;
+            botGroup.add(head);
+
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0x333333 });
+            const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.1), eyeMat);
+            eyeL.position.set(-0.25, 4.0, 0.62);
+            botGroup.add(eyeL);
+            const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.1), eyeMat);
+            eyeR.position.set(0.25, 4.0, 0.62);
+            botGroup.add(eyeR);
+
+            const mouthGeo = new THREE.TorusGeometry(0.15, 0.03, 16, 32, Math.PI);
+            const mouth = new THREE.Mesh(mouthGeo, eyeMat);
+            mouth.position.set(0, 3.8, 0.67);
+            mouth.rotation.x = Math.PI; 
+            botGroup.add(mouth);
+
+            // 問題牌 (加寬以容納新聞文字)
+            const qMat = new THREE.MeshBasicMaterial({ 
+                map: createTextTexture(newsData.question, '#fff', '#FF69B4', 40, 750, 128),
+                transparent: true
+            });
+            const qPlane = new THREE.Mesh(new THREE.PlaneGeometry(5.0, 0.9), qMat); 
+            qPlane.position.y = 5.5;
+            botGroup.add(qPlane);
+
+            const targetColor = '#' + new THREE.Color().setHSL(hue, 0.7, 0.4).getHexString();
+
+            // 答案 1
+            const t1Mat = new THREE.MeshBasicMaterial({ map: createTextTexture(newsData.answers[0].val, '#fff', targetColor, 36, 450, 100), transparent: true });
+            const t1 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.6), t1Mat);
+            t1.position.set(0, 4.6, 0.6); 
+            t1.userData = { isTarget: true, isCorrect: newsData.answers[0].isCorrect, bot: botGroup };
+            botGroup.add(t1);
+
+            // 答案 2
+            const t2Mat = new THREE.MeshBasicMaterial({ map: createTextTexture(newsData.answers[1].val, '#fff', targetColor, 36, 450, 100), transparent: true });
+            const t2 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.6), t2Mat);
+            t2.position.set(0, 2.7, 1.0); 
+            t2.userData = { isTarget: true, isCorrect: newsData.answers[1].isCorrect, bot: botGroup };
+            botGroup.add(t2);
+
+            // 答案 3
+            const t3Mat = new THREE.MeshBasicMaterial({ map: createTextTexture(newsData.answers[2].val, '#fff', targetColor, 36, 450, 100), transparent: true });
+            const t3 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.6), t3Mat);
+            t3.position.set(0, 1.2, 1.3); 
+            t3.userData = { isTarget: true, isCorrect: newsData.answers[2].isCorrect, bot: botGroup };
+            botGroup.add(t3);
+
+            const spawnRadius = 18;
+            const angle = Math.random() * Math.PI * 2;
+            botGroup.position.x = Math.cos(angle) * spawnRadius;
+            botGroup.position.z = Math.sin(angle) * spawnRadius;
+            
+            botGroup.lookAt(camera.position.x, botGroup.position.y, camera.position.z);
+
+            scene.add(botGroup);
+            bots.push(botGroup);
+        }
+
+        function onKeyDown(event) {
+            switch (event.code) {
+                case 'KeyW': moveState.forward = true; break;
+                case 'KeyA': moveState.left = true; break;
+                case 'KeyS': moveState.backward = true; break;
+                case 'KeyD': moveState.right = true; break;
+            }
+        }
+
+        function onKeyUp(event) {
+            switch (event.code) {
+                case 'KeyW': moveState.forward = false; break;
+                case 'KeyA': moveState.left = false; break;
+                case 'KeyS': moveState.backward = false; break;
+                case 'KeyD': moveState.right = false; break;
+            }
+        }
+
+        function onMouseDown(event) {
+            if (!isPlaying) return;
+            if (event.button === 0) { 
+                castMagic();
+            }
+        }
+
+        function castMagic() {
+            if (soundShoot.isPlaying) soundShoot.stop();
+            soundShoot.play();
+
+            if (camera.userData.wand) {
+                const wand = camera.userData.wand;
+                const star = camera.userData.wandStar;
+                const originalZ = wand.position.z;
+                const originalRotX = wand.rotation.x;
+                
+                wand.position.z -= 0.1; 
+                wand.rotation.x += 0.1;
+                star.scale.set(1.5, 1.5, 1.5); 
+                
+                setTimeout(() => {
+                    wand.position.z = originalZ;
+                    wand.rotation.x = originalRotX;
+                    star.scale.set(1, 1, 1);
+                }, 150);
+            }
+
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+
+            createMagicBeam();
+
+            let interactableObjects = [];
+            bots.forEach(bot => {
+                bot.children.forEach(child => {
+                    if(child.userData && child.userData.isTarget) {
+                        interactableObjects.push(child);
+                    } else if (child.isMesh && child.geometry.type === 'SphereGeometry') {
+                        child.userData = { isBody: true, bot: bot };
+                        interactableObjects.push(child);
+                    }
+                });
+            });
+
+            const intersects = raycaster.intersectObjects(interactableObjects);
+
+            if (intersects.length > 0) {
+                const hitObject = intersects[0].object;
+
+                if (hitObject.userData.isTarget) {
+                    handleAnswerHit(hitObject.userData.isCorrect, hitObject.userData.bot);
+                } else if (hitObject.userData.isBody) {
+                    createMagicSparks(intersects[0].point, 0xFFFF00);
+                }
+            }
+        }
+
+        function createMagicBeam() {
+            const material = new THREE.LineBasicMaterial({ color: 0xFF69B4, linewidth: 4 });
+            const points = [];
+            const startPoint = new THREE.Vector3(0.3, -0.2, -0.7).unproject(camera);
+            points.push(startPoint);
+            
+            const endPoint = new THREE.Vector3(0, 0, -50).unproject(camera);
+            points.push(endPoint);
+
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const line = new THREE.Line(geometry, material);
+            scene.add(line);
+
+            setTimeout(() => {
+                scene.remove(line);
+                geometry.dispose();
+                material.dispose();
+            }, 60);
+        }
+
+        function createMagicSparks(position, colorHex) {
+            const particleGeo = new THREE.SphereGeometry(0.15, 8, 8);
+            const particleMat = new THREE.MeshBasicMaterial({ color: colorHex });
+            
+            for(let i=0; i<8; i++) {
+                const p = new THREE.Mesh(particleGeo, particleMat);
+                p.position.copy(position);
+                
+                p.userData.velocity = new THREE.Vector3(
+                    (Math.random() - 0.5) * 8,
+                    (Math.random() - 0.5) * 8 + 3, 
+                    (Math.random() - 0.5) * 8
+                );
+                
+                scene.add(p);
+                
+                let life = 1.0;
+                const animateParticle = () => {
+                    if(!isPlaying) return;
+                    p.position.addScaledVector(p.userData.velocity, 0.016);
+                    p.userData.velocity.y -= 9.8 * 0.016; 
+                    life -= 0.03;
+                    p.scale.set(life, life, life);
+                    if(life > 0) {
+                        requestAnimationFrame(animateParticle);
+                    } else {
+                        scene.remove(p);
+                        p.geometry.dispose();
+                        p.material.dispose();
+                    }
+                };
+                animateParticle();
+            }
+        }
+
+        function handleAnswerHit(isCorrect, botGroup) {
+            if (isCorrect) {
+                if (soundHit.isPlaying) soundHit.stop();
+                soundHit.play();
+
+                score += 10 * wave;
+                scoreDisplay.innerText = `分數: ${score}`;
+                botsDefeated++;
+                
+                createMagicSparks(botGroup.position.clone().setY(2), 0xFFD700);
+                
+                removeBot(botGroup);
+
+                if (botsDefeated % 5 === 0) {
+                    wave++;
+                    waveDisplay.innerText = `第 ${wave} 關`;
+                    updateHealth(15);
+                }
+            } else {
+                if (soundDamage.isPlaying) soundDamage.stop();
+                soundDamage.play();
+
+                updateHealth(-20);
+                
+                createMagicSparks(botGroup.position.clone().setY(2), 0x555555);
+                
+                damageOverlay.style.backgroundColor = "rgba(255, 105, 180, 0.5)";
+                setTimeout(() => { damageOverlay.style.backgroundColor = "rgba(255, 182, 193, 0)"; }, 200);
+
+                removeBot(botGroup);
+            }
+        }
+
+        function removeBot(botGroup) {
+            const index = bots.indexOf(botGroup);
+            if (index > -1) {
+                bots.splice(index, 1);
+                scene.remove(botGroup);
+                
+                botGroup.traverse((child) => {
+                    if (child.isMesh) {
+                        child.geometry.dispose();
+                        if (child.material.map) child.material.map.dispose();
+                        child.material.dispose();
+                    }
+                });
+            }
+        }
+
+        function updateHealth(amount) {
+            health += amount;
+            if (health > 100) health = 100;
+            if (health <= 0) {
+                health = 0;
+                gameOver();
+            }
+            
+            healthBar.style.width = `${health}%`;
+            if(health < 30) {
+                healthBar.style.backgroundColor = '#FF0000'; 
+            } else if (health < 60) {
+                healthBar.style.backgroundColor = '#FFA500'; 
+            } else {
+                healthBar.style.backgroundColor = '#FF69B4'; 
+            }
+        }
+
+        function gameOver() {
+            isPlaying = false;
+            controls.unlock();
+            
+            uiLayer.classList.add('hidden');
+            gameOverScreen.classList.remove('hidden');
+            document.getElementById('final-score').innerText = `獲得分數: ${score}\n挑戰到第 ${wave} 關`;
+        }
+
+        function resetGame() {
+            score = 0;
+            health = 100;
+            wave = 1;
+            botsDefeated = 0;
+            
+            scoreDisplay.innerText = `分數: ${score}`;
+            waveDisplay.innerText = `第 ${wave} 關`;
+            updateHealth(0); 
+            
+            [...bots].forEach(bot => removeBot(bot));
+            
+            camera.position.set(0, 2.5, 0);
+            camera.rotation.set(0, 0, 0); 
+            
+            gameOverScreen.classList.add('hidden');
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const time = performance.now();
+            const delta = (time - lastTime) / 1000;
+            lastTime = time;
+
+            if (isPlaying) {
+                velocity.x -= velocity.x * 10.0 * delta;
+                velocity.z -= velocity.z * 10.0 * delta;
+
+                direction.z = Number(moveState.forward) - Number(moveState.backward);
+                direction.x = Number(moveState.right) - Number(moveState.left);
+                direction.normalize(); 
+
+                if (moveState.forward || moveState.backward) velocity.z -= direction.z * playerSpeed * delta * 50;
+                if (moveState.left || moveState.right) velocity.x -= direction.x * playerSpeed * delta * 50;
+
+                controls.moveRight(-velocity.x * delta);
+                controls.moveForward(-velocity.z * delta);
+                
+                const boundary = 18;
+                if(camera.position.x > boundary) camera.position.x = boundary;
+                if(camera.position.x < -boundary) camera.position.x = -boundary;
+                if(camera.position.z > boundary) camera.position.z = boundary;
+                if(camera.position.z < -boundary) camera.position.z = -boundary;
+                camera.position.y = 2.5; 
+
+                if (Math.random() < 0.01 + (wave * 0.002)) {
+                    spawnCuteMonster();
+                }
+
+                bots.forEach(bot => {
+                    const targetPos = camera.position.clone();
+                    targetPos.y = bot.position.y;
+                    bot.lookAt(targetPos);
+                    
+                    bot.children.forEach(child => {
+                        if(child.geometry && child.geometry.type === 'PlaneGeometry') {
+                            if(child.position.y > 4) { 
+                                child.lookAt(camera.position.x, camera.position.y, camera.position.z);
+                            }
+                        }
+                    });
+
+                    const speed = bot.userData.speed;
+                    bot.translateZ(speed * delta);
+                    
+                    const dist = bot.position.distanceTo(camera.position);
+                    if (dist < 3.0) {
+                        if (soundDamage.isPlaying) soundDamage.stop();
+                        soundDamage.play();
+
+                        updateHealth(-10); 
+                        damageOverlay.style.backgroundColor = "rgba(255, 105, 180, 0.4)";
+                        setTimeout(() => { damageOverlay.style.backgroundColor = "rgba(255, 182, 193, 0)"; }, 150);
+                        removeBot(bot); 
+                    }
+                });
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        init();
+
+    </script>
+</body>
+</html>
